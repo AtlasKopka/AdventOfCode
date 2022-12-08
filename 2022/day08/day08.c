@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
 
   width++;
   height++;
-  // part1(map, width, height);
+  part1(map, width, height);
   part2(map, width, height);
 
   free(map);
