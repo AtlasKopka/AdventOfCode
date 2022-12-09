@@ -1,6 +1,4 @@
 *.out
-input.txt
-input
-test.txt
-test2.txt
+input*
+test*
 
