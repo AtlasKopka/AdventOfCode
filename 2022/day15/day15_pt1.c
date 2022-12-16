@@ -289,7 +289,6 @@ void part2_new(Coordinates *sensors) {
 int main(int argc, char **argv) {
   Coordinates *sensors = read(argv[1]);
   part1(sensors);
-  part2_slow(sensors);
   free(sensors);
   return 0;
 }
