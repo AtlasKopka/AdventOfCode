@@ -5,97 +5,111 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct node node;
+typedef struct node {
+  int32_t marble;
+  node *next;
+  node *prev;
+} node;
+
 typedef struct game {
-  int32_t numPlayers, numMarbles;
-  int32_t playerScores[512];
-  int32_t marbleToBePlaced;
-  int32_t currentMarblePos;
-  int32_t numMarblesPlaced;
-  int32_t circleSize;
-  int32_t currentPlayer;
-  int32_t *circle;
+  node *available;
+  node arena[];
 } game;
 
-void printGame(game *g) {
-#ifndef DEBUG
-  return;
-#endif
-  printf("[%d] ", g->currentPlayer + 1);
-  for (size_t i = 0; i < g->circleSize; i++) {
-    if (g->currentMarblePos == i) {
-      printf("(%d), ", g->circle[i]);
+game *init(size_t numMarbles) {
+  game *g = calloc(sizeof(game) + sizeof(node) * numMarbles, 1);
+  for (size_t i = 1; i < numMarbles - 1; i++) {
+    g->arena[i].prev = &g->arena[i - 1];
+    g->arena[i].next = &g->arena[i + 1];
+  }
+  g->arena[0].next = &g->arena[1];
+  g->arena[0].prev = &g->arena[numMarbles - 1];
+  g->arena[numMarbles - 1].next = &g->arena[0];
+  g->arena[numMarbles - 1].prev = &g->arena[numMarbles - 2];
+  g->available = &g->arena[0];
+  return g;
+}
+
+void printGame(node *n) {
+  node *first = n;
+  for (;;) {
+    if (n == first) {
+      printf("(%d), ", n->marble);
     } else {
-      printf("%d, ", g->circle[i]);
+      printf("%d, ", n->marble);
+    }
+    n = n->next;
+    if (n == first) {
+      break;
     }
   }
   printf("\n");
 }
 
-void runGame(game *g) {
-  bool cleanup = false;
-  if (!g->circle) {
-    g->circle = calloc(g->numMarbles * 2, sizeof(g->circle[0]));
-    cleanup = true;
-    g->currentMarblePos = 1;
-    g->numMarblesPlaced = 2;
-    g->circleSize = 2;
-    g->circle[0] = 0;
-    g->circle[1] = 1;
-    g->currentPlayer = 1;
-  }
+uint64_t runGame(int32_t numPlayers, int32_t numMarbles) {
+  uint64_t playerScores[1024] = {0};
+  game *g = init(numMarbles);
 
-  for (; g->numMarblesPlaced <= g->numMarbles;
-       g->currentPlayer = (g->currentPlayer + 1) % g->numPlayers) {
+  node *currentMarblePos = g->available;
+  currentMarblePos->marble = 0;
+  g->available = g->available->next;
+  currentMarblePos->next = g->available;
+  currentMarblePos->next->marble = 1;
+  g->available = g->available->next;
 
-    if (g->numMarblesPlaced % 23 == 0) {
-      g->playerScores[g->currentPlayer] += g->numMarblesPlaced;
-      int32_t marbleToRemove = g->currentMarblePos - 7;
-      if (marbleToRemove < 0) {
-        marbleToRemove += g->circleSize;
+  currentMarblePos->prev = currentMarblePos->next;
+  currentMarblePos->next->next = currentMarblePos;
+  currentMarblePos->next->prev = currentMarblePos;
+
+  uint64_t numMarblesPlaced = 2;
+  currentMarblePos = currentMarblePos->next;
+
+  for (int32_t currentPlayer = 1;;
+       currentPlayer = (currentPlayer + 1) % numPlayers) {
+    if (numMarblesPlaced == numMarbles) {
+      break;
+    }
+
+    if (numMarblesPlaced % 23 == 0) {
+      playerScores[currentPlayer] += numMarblesPlaced;
+      node *marbleToRemove = currentMarblePos;
+      for (size_t i = 0; i < 7; i++) {
+        marbleToRemove = marbleToRemove->prev;
       }
-      assert(marbleToRemove >= 0);
-      g->playerScores[g->currentPlayer] += g->circle[marbleToRemove];
-      int32_t numMarblesToShift = g->circleSize - marbleToRemove - 1;
-      assert(numMarblesToShift >= 0);
-      if (numMarblesToShift) {
-        memmove(g->circle + marbleToRemove, g->circle + marbleToRemove + 1,
-                numMarblesToShift * sizeof(int32_t));
-      }
-      g->circle[g->circleSize] = 0;
-      g->circleSize--;
-      g->numMarblesPlaced++;
-      g->currentMarblePos = marbleToRemove;
-      printGame(g);
+      playerScores[currentPlayer] += marbleToRemove->marble;
+      currentMarblePos = marbleToRemove->next;
+      node *prev = marbleToRemove->prev;
+      prev->next = currentMarblePos;
+      currentMarblePos->prev = prev;
+      marbleToRemove->next = g->available;
+      g->available = marbleToRemove;
+
+      numMarblesPlaced++;
       continue;
     }
 
-    g->currentMarblePos = (g->currentMarblePos + 2) % g->circleSize;
-    if (g->currentMarblePos == 0) {
-      g->currentMarblePos = g->circleSize;
-    } else {
-      size_t marblesToShift = g->circleSize - g->currentMarblePos;
-      assert(marblesToShift > 0);
-      memmove(g->circle + g->currentMarblePos + 1,
-              g->circle + g->currentMarblePos,
-              marblesToShift * sizeof(int32_t));
-    }
-    g->circle[g->currentMarblePos] = g->numMarblesPlaced;
-    g->numMarblesPlaced++;
-    g->circleSize++;
-    printGame(g);
+    currentMarblePos = currentMarblePos->next;
+    node *newNode = g->available;
+    g->available = g->available->next;
+    node *nextNode = currentMarblePos->next;
+    currentMarblePos->next = newNode;
+    newNode->prev = currentMarblePos;
+    newNode->next = nextNode;
+    nextNode->prev = newNode;
+    newNode->marble = numMarblesPlaced;
+    currentMarblePos = newNode;
+    numMarblesPlaced++;
   }
+  free(g);
 
-  if (cleanup) {
-    free(g->circle);
-  }
-
-  int32_t highScore = 0;
-  for (size_t i = 0; i < g->numPlayers; i++) {
-    if (g->playerScores[i] > highScore) {
-      highScore = g->playerScores[i];
+  uint64_t topScore = 0;
+  for (size_t i = 0; i < numPlayers; i++) {
+    if (playerScores[i] > topScore) {
+      topScore = playerScores[i];
     }
   }
-  printf("[part1]: high score is %d\n", highScore);
+  return topScore;
 }
 
 int main(int argc, char **argv) {
@@ -105,6 +119,7 @@ int main(int argc, char **argv) {
   fscanf(fh, "%d players; last marble is worth %d points", &numPlayers,
          &numMarbles);
   fclose(fh);
-  runGame(&(game){.numPlayers = numPlayers, .numMarbles = numMarbles});
+  printf("[part1]: %ld\n", runGame(numPlayers, numMarbles));
+  printf("[part2]: %ld\n", runGame(numPlayers, numMarbles * 100));
   return 0;
 }
