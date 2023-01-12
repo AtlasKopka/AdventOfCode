@@ -62,7 +62,7 @@ void part1(char *state, char *rules, size_t numRules) {
 }
 
 void part2(char *state, char *rules, size_t numRules) {
-  int64_t repeatGen = 100;
+  int64_t repeatGen = 256;
   run(state, repeatGen, rules, numRules);
   int64_t startPos;
   for (startPos = 0; state[startPos] == '.'; startPos++) {
